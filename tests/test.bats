@@ -58,7 +58,7 @@ setup_project() {
 teardown() {
   set -eu -o pipefail
   ddev delete -Oy ${PROJNAME} >/dev/null 2>&1
-  # [ "${TESTDIR}" != "" ] && rm -rf ${TESTDIR}
+  [ "${TESTDIR}" != "" ] && rm -rf ${TESTDIR}
 }
 
 @test "install from directory" {
