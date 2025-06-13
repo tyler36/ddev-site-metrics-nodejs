@@ -1,6 +1,17 @@
 name: site-metrics-nodejs
 
-project_files:
-  - docker-compose.site-metrics-nodejs.yaml
+# project_files:
+#   - instrumentation.ts
+
+post_install_actions:
+  - #ddev-description:Install required packages
+  - ddev npm i @opentelemetry/api @opentelemetry/auto-instrumentations-node
+  - #ddev-description:Configure some default environmental variables.
+    # See https://ddev.readthedocs.io/en/stable/users/extend/customization-extendibility/#environment-variables-for-containers-and-services
+  - ddev dotenv set .ddev/.env.web --otel-log-level=info > /dev/null 2>&1
+  - ddev dotenv set .ddev/.env.web --otel-service-name=nodejs > /dev/null 2>&1
+  - ddev dotenv set .ddev/.env.web --otel-traces-exporter=otlp > /dev/null 2>&1
+  - ddev dotenv set .ddev/.env.web --otel-exporter-otlp-endpoint="http://grafana-alloy:4318" > /dev/null 2>&1
+
 
 ddev_version_constraint: '>= v1.24.3'
