@@ -32,24 +32,27 @@ setup() {
   export DDEV_NO_INSTRUMENTATION=true
   ddev delete -Oy "${PROJNAME}" >/dev/null 2>&1 || true
   cd "${TESTDIR}"
-  run ddev config --project-name="${PROJNAME}" --project-tld=ddev.site
+  run ddev config --project-name="${PROJNAME}" --project-tld=ddev.site --project-type=generic
   assert_success
-  run ddev start -y
-  assert_success
+  # run ddev start -y
+  # assert_success
 }
 
 health_checks() {
-  # Do something useful here that verifies the add-on
-
-  # You can check for specific information in headers:
-  # run curl -sfI https://${PROJNAME}.ddev.site
-  # assert_output --partial "HTTP/2 200"
-  # assert_output --partial "test_header"
-
-  # Or check if some command gives expected output:
-  DDEV_DEBUG=true run ddev launch
+  # Check the server has started
+  run curl -I "https://${PROJNAME}.ddev.site:8080/rolldice"
   assert_success
-  assert_output --partial "FULLURL https://${PROJNAME}.ddev.site"
+  assert_output --partial "HTTP/2 200"
+}
+
+setup_project() {
+  # Copy over express project
+  cd "${TESTDIR}"
+  cp -a "${DIR}/tests/testdata/." "${TESTDIR}/"
+  ddev npm i
+
+  # Configure DDEV for express server
+  cp -a "${TESTDIR}/config.express.yaml" "${TESTDIR}/.ddev/config.express.yaml"
 }
 
 teardown() {
@@ -60,12 +63,93 @@ teardown() {
 
 @test "install from directory" {
   set -eu -o pipefail
+
+  setup_project
+
   echo "# ddev add-on get ${DIR} with project ${PROJNAME} in $(pwd)" >&3
   run ddev add-on get "${DIR}"
   assert_success
+
   run ddev restart -y
   assert_success
   health_checks
+}
+
+@test "it can collect traces" {
+  set -eu -o pipefail
+
+  setup_project
+
+  echo "# ddev add-on get ${DIR} with project ${PROJNAME} in $(pwd)" >&3
+  run ddev add-on get "${DIR}"
+  assert_success
+
+  # Restrict otel to only what we need
+  ddev dotenv set .ddev/.env.web --otel-logs-exporter=none > /dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-metrics-exporter=none > /dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-traces-exporter=console > /dev/null 2>&1
+
+  run ddev restart -y
+  assert_success
+
+  # Check the logs do NOT contain trace output
+  run ddev logs -s web
+  assert_success
+  refute_output --partial "'http.status_text': 'OK'"
+
+  # Access website to generate traces
+  run curl -I "https://${PROJNAME}.ddev.site:8080/rolldice"
+  assert_success
+
+  # Sleep for an arbitrary amount of time for logs to be written.
+  sleep 5
+
+  # Check the logs contain trace output
+  run ddev logs -s web
+  assert_success
+  assert_output --partial "'http.status_text': 'OK'"
+}
+
+@test "it can collect traces via OTEL" {
+  set -eu -o pipefail
+
+  setup_project
+
+  echo "# Install site-metrics" >&3
+  run ddev addon get tyler36/ddev-site-metrics
+  assert_success
+
+  echo "# ddev add-on get ${DIR} with project ${PROJNAME} in $(pwd)" >&3
+  run ddev add-on get "${DIR}"
+  assert_success
+
+  # Remove NGINX port conflict as we're using Express.
+  rm .ddev/docker-compose.nginx-exporter.yaml
+  rm .ddev/nginx_full/stub_status.conf
+
+  # Restrict otel to only what we need
+  ddev dotenv set .ddev/.env.web --otel-logs-exporter=none > /dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-metrics-exporter=otlp > /dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-traces-exporter=otlp > /dev/null 2>&1
+
+  run ddev restart -y
+  assert_success
+
+  # Check that there are no traces currently stored
+  run ddev exec curl -G -s grafana-tempo:3200/api/search
+  assert_success
+  assert_output --partial '"traces":[]'
+
+  # Access website to generate traces
+  run curl -I "https://${PROJNAME}.ddev.site:8080/rolldice"
+  assert_success
+  # Wait for an arbitrary amount of time for the trace to propagate.
+  sleep 5
+
+  # Check that there are no traces currently stored
+  run ddev exec curl -G -s grafana-tempo:3200/api/search
+  assert_success
+  assert_output --partial '"rootServiceName":"nodejs"'
 }
 
 # bats test_tags=release

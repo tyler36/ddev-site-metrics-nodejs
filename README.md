@@ -7,7 +7,9 @@
 
 ## Overview
 
-This add-on integrates Site Metrics Nodejs into your [DDEV](https://ddev.com/) project.
+This add-on add support for Open Telemetry via zero-instrumentation. It helps automate the steps to setup and then collect data.
+
+It is designed to support [tyler36/ddev-site-metrics](https://github.com/tyler36/ddev-site-metrics), an add-on designed to consume collected logs, metrics and traces.
 
 ## Installation
 
@@ -16,32 +18,71 @@ ddev add-on get tyler36/ddev-site-metrics-nodejs
 ddev restart
 ```
 
-After installation, make sure to commit the `.ddev` directory to version control.
-
 ## Usage
 
-| Command | Description |
-| ------- | ----------- |
-| `ddev describe` | View service status and used ports for Site Metrics Nodejs |
-| `ddev logs -s site-metrics-nodejs` | Check Site Metrics Nodejs logs |
+1. Inject instrumentation _before_ JavaScript process.
+
+For example. An project uses the following node script to launch their server in `packages.json`:
+
+```json
+  "scripts": {
+    "dev": "node app.js",
+    ...
+  },
+```
+
+Using this add-on, require instrumentation _before_ initializing your node script:
+
+```json
+  "scripts": {
+    "dev": "node --require @opentelemetry/auto-instrumentations-node/register app.js",
+    ...
+  },
+```
+
+1. Start your Node server
+
+```shell
+ddev npm run dev
+```
+
+This add-on is configured via environmental variables, typically in `.ddev/.env.web`.
+It is recommended to limit variables to the web container to prevent leakage.
+
+The following example sends logs to the console:
+
+```env
+OTEL_TRACES_EXPORTER=console
+```
+
+- starting your server `ddev npm run dev`, you will see traces outputted in the terminal.
+
+- if you using a `web_deamon` method to automatically start the server, use the following to view traces:
+
+```shell
+ddev log -s web
+```
+
+### Configuration for ddev-site-metrics
+
+The following example send traces to [tyler36/ddev-site-metrics](https://github.com/tyler36/ddev-site-metrics) for processing.
+
+```env
+OTEL_TRACES_EXPORTER=otlp
+OTEL_EXPORTER_OTLP_ENDPOINT=http://grafana-alloy:4318
+```
 
 ## Advanced Customization
 
-To change the Docker image:
+### Environmental Variables
 
-```bash
-ddev dotenv set .ddev/.env.site-metrics-nodejs --site-metrics-nodejs-docker-image="busybox:stable"
-ddev add-on get tyler36/ddev-site-metrics-nodejs
-ddev restart
-```
+This add-on sets environmental variables in `.ddev/.env.web`:
 
-Make sure to commit the `.ddev/.env.site-metrics-nodejs` file to version control.
+- `OTEL_SERVICE_NAME="nodejs"`: The service name assigned to collected data.
+- `OTEL_EXPORTER_OTLP_ENDPOINT="http://grafana-alloy:4318"`: The base endpoint, as provided by `ddev-site-metrics` add-on.
 
-All customization options (use with caution):
-
-| Variable | Flag | Default |
-| -------- | ---- | ------- |
-| `SITE_METRICS_NODEJS_DOCKER_IMAGE` | `--site-metrics-nodejs-docker-image` | `busybox:stable` |
+If these values are changed, you must restart DDEV for them to take affect.
+For other methods to override the, see [Environment Variables for Containers and Services](https://ddev.readthedocs.io/en/stable/users/extend/customization-extendibility/).
 
 ## Credits
 
