@@ -85,9 +85,9 @@ teardown() {
   assert_success
 
   # Restrict otel to only what we need
-  ddev dotenv set .ddev/.env.web --otel-logs-exporter=none > /dev/null 2>&1
-  ddev dotenv set .ddev/.env.web --otel-metrics-exporter=none > /dev/null 2>&1
-  ddev dotenv set .ddev/.env.web --otel-traces-exporter=console > /dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-logs-exporter=none >/dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-metrics-exporter=none >/dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-traces-exporter=console >/dev/null 2>&1
 
   run ddev restart -y
   assert_success
@@ -128,9 +128,9 @@ teardown() {
   rm .ddev/nginx_full/stub_status.conf
 
   # Restrict otel to only what we need
-  ddev dotenv set .ddev/.env.web --otel-logs-exporter=none > /dev/null 2>&1
-  ddev dotenv set .ddev/.env.web --otel-metrics-exporter=otlp > /dev/null 2>&1
-  ddev dotenv set .ddev/.env.web --otel-traces-exporter=otlp > /dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-logs-exporter=none >/dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-metrics-exporter=otlp >/dev/null 2>&1
+  ddev dotenv set .ddev/.env.web --otel-traces-exporter=otlp >/dev/null 2>&1
 
   run ddev restart -y
   assert_success
@@ -155,9 +155,13 @@ teardown() {
 # bats test_tags=release
 @test "install from release" {
   set -eu -o pipefail
+
+  setup_project
+
   echo "# ddev add-on get ${GITHUB_REPO} with project ${PROJNAME} in $(pwd)" >&3
   run ddev add-on get "${GITHUB_REPO}"
   assert_success
+
   run ddev restart -y
   assert_success
   health_checks
